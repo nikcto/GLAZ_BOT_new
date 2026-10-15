@@ -24,6 +24,7 @@ class ReminderStore:
     def __init__(self):
         self._pending = {}
         self._disabled = set()
+        self._disabled_owners = set()
         self._lock = threading.RLock()
 
     @staticmethod
@@ -44,7 +45,7 @@ class ReminderStore:
 
         with self._lock:
             key = (owner_id, chat_id)
-            if key in self._disabled:
+            if owner_id in self._disabled_owners or key in self._disabled:
                 self._pending.pop(key, None)
                 return
             if pending:
@@ -75,6 +76,20 @@ class ReminderStore:
             key = (owner_id, chat_id)
             self._disabled.add(key)
             self._pending.pop(key, None)
+
+    def is_enabled(self, owner_id):
+        with self._lock:
+            return owner_id not in self._disabled_owners
+
+    def set_enabled(self, owner_id, enabled):
+        with self._lock:
+            if enabled:
+                self._disabled_owners.discard(owner_id)
+            else:
+                self._disabled_owners.add(owner_id)
+                for key in list(self._pending):
+                    if key[0] == owner_id:
+                        self._pending.pop(key, None)
 
     def snooze(self, owner_id, chat_id, seconds=4 * 60 * 60):
         with self._lock:

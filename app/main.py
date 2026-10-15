@@ -2194,16 +2194,21 @@ def handle_menu_callback(call):
             )
 
         elif action == "reminders":
+            reminders_enabled = reminder_store.is_enabled(call.from_user.id)
             keyboard = types.InlineKeyboardMarkup(row_width=1)
             keyboard.add(
-                types.InlineKeyboardButton("✅ Напоминания включены", callback_data="reminders_info"),
+                types.InlineKeyboardButton(
+                    "🔕 Отключить напоминания" if reminders_enabled else "🔔 Включить напоминания",
+                    callback_data="reminders_toggle"
+                ),
                 types.InlineKeyboardButton("⬅️ Назад", callback_data="menu_settings")
             )
             bot.edit_message_text(
                 "⏰ <b>Напоминания</b>\n\n"
                 "Бот напоминает через 4 часа, если вы не ответили на вопрос собеседника "
                 "или оставили сообщение с обещанием ответить позже.\n\n"
-                "Настройки напоминаний действуют только во время работы бота.",
+                f"Статус: {'🟢 включены' if reminders_enabled else '🔴 отключены'}\n\n"
+                "Настройка действует только во время работы бота.",
                 call.message.chat.id,
                 call.message.message_id,
                 reply_markup=keyboard,
@@ -2307,6 +2312,39 @@ def handle_additional_callbacks(call):
     except Exception as e:
         logger.error(f"Error in additional callbacks: {str(e)}", exc_info=True)
         bot.answer_callback_query(call.id, "⚠️ Произошла ошибка")
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "reminders_toggle")
+def handle_reminders_toggle(call):
+    try:
+        owner_id = call.from_user.id
+        enabled = not reminder_store.is_enabled(owner_id)
+        reminder_store.set_enabled(owner_id, enabled)
+        status = "включены" if enabled else "отключены"
+
+        keyboard = types.InlineKeyboardMarkup(row_width=1)
+        keyboard.add(
+            types.InlineKeyboardButton(
+                "🔕 Отключить напоминания" if enabled else "🔔 Включить напоминания",
+                callback_data="reminders_toggle",
+            ),
+            types.InlineKeyboardButton("⬅️ Назад", callback_data="menu_settings"),
+        )
+        bot.edit_message_text(
+            "⏰ <b>Напоминания</b>\n\n"
+            "Бот напоминает через 4 часа, если вы не ответили на вопрос собеседника "
+            "или оставили сообщение с обещанием ответить позже.\n\n"
+            f"Статус: {'🟢 включены' if enabled else '🔴 отключены'}\n\n"
+            "Настройка действует только во время работы бота.",
+            call.message.chat.id,
+            call.message.message_id,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+        )
+        bot.answer_callback_query(call.id, f"Напоминания {status}")
+    except Exception as e:
+        logger.error(f"Error toggling reminders: {e}", exc_info=True)
+        bot.answer_callback_query(call.id, "⚠️ Не удалось изменить настройки", show_alert=True)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("reminder_"))
