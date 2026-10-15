@@ -2081,7 +2081,7 @@ def create_main_menu() -> types.InlineKeyboardMarkup:
         types.InlineKeyboardButton("📊 Статистика", callback_data="menu_stats")
     )
     keyboard.add(
-        types.InlineKeyboardButton("🔔 Уведомления", callback_data="menu_notify")
+        types.InlineKeyboardButton("⚙️ Настройки", callback_data="menu_settings")
     )
     keyboard.add(
         types.InlineKeyboardButton("❓ Помощь", callback_data="menu_help")
@@ -2150,6 +2150,21 @@ def handle_menu_callback(call):
                 reply_markup=keyboard,
                 parse_mode="HTML"
             )
+
+        elif action == "settings":
+            keyboard = types.InlineKeyboardMarkup(row_width=1)
+            keyboard.add(
+                types.InlineKeyboardButton("🔔 Уведомления", callback_data="menu_notify"),
+                types.InlineKeyboardButton("⏰ Напоминания", callback_data="menu_reminders"),
+                types.InlineKeyboardButton("⬅️ Назад", callback_data="menu_back")
+            )
+            bot.edit_message_text(
+                "⚙️ <b>Настройки</b>\n\nВыберите нужный раздел:",
+                call.message.chat.id,
+                call.message.message_id,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
             
         elif action == "sub":
             bot.answer_callback_query(call.id, "Раздел недоступен", show_alert=True)
@@ -2172,6 +2187,23 @@ def handle_menu_callback(call):
             bot.edit_message_text(
                 f"🔔 <b>Уведомления</b>\n\n"
                 f"Уведомления о ваших сообщениях сейчас {status}",
+                call.message.chat.id,
+                call.message.message_id,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+
+        elif action == "reminders":
+            keyboard = types.InlineKeyboardMarkup(row_width=1)
+            keyboard.add(
+                types.InlineKeyboardButton("✅ Напоминания включены", callback_data="reminders_info"),
+                types.InlineKeyboardButton("⬅️ Назад", callback_data="menu_settings")
+            )
+            bot.edit_message_text(
+                "⏰ <b>Напоминания</b>\n\n"
+                "Бот напоминает через 4 часа, если вы не ответили на вопрос собеседника "
+                "или оставили сообщение с обещанием ответить позже.\n\n"
+                "Настройки напоминаний действуют только во время работы бота.",
                 call.message.chat.id,
                 call.message.message_id,
                 reply_markup=keyboard,
@@ -2623,7 +2655,7 @@ def create_main_menu() -> types.InlineKeyboardMarkup:
         types.InlineKeyboardButton("Статистика", callback_data="menu_stats")
     )
     keyboard.add(
-        types.InlineKeyboardButton("Уведомления", callback_data="menu_notify"),
+        types.InlineKeyboardButton("⚙️ Настройки", callback_data="menu_settings"),
         types.InlineKeyboardButton("Помощь", callback_data="menu_help")
     )
     return keyboard

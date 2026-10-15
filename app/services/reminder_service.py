@@ -76,7 +76,7 @@ class ReminderStore:
             self._disabled.add(key)
             self._pending.pop(key, None)
 
-    def snooze(self, owner_id, chat_id, seconds=3 * 60 * 60):
+    def snooze(self, owner_id, chat_id, seconds=4 * 60 * 60):
         with self._lock:
             item = self._pending.get((owner_id, chat_id))
             if item:
