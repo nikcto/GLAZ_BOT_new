@@ -23,6 +23,7 @@ PROMISE_PHRASES = (
 class ReminderStore:
     def __init__(self):
         self._pending = {}
+        self._disabled = set()
         self._lock = threading.RLock()
 
     @staticmethod
@@ -43,6 +44,9 @@ class ReminderStore:
 
         with self._lock:
             key = (owner_id, chat_id)
+            if key in self._disabled:
+                self._pending.pop(key, None)
+                return
             if pending:
                 pending.update({
                     "created_at": timestamp or time.time(),
@@ -61,6 +65,24 @@ class ReminderStore:
                     item["reminded"] = True
                     result.append((key[0], key[1], dict(item)))
         return result
+
+    def dismiss(self, owner_id, chat_id):
+        with self._lock:
+            self._pending.pop((owner_id, chat_id), None)
+
+    def disable(self, owner_id, chat_id):
+        with self._lock:
+            key = (owner_id, chat_id)
+            self._disabled.add(key)
+            self._pending.pop(key, None)
+
+    def snooze(self, owner_id, chat_id, seconds=3 * 60 * 60):
+        with self._lock:
+            item = self._pending.get((owner_id, chat_id))
+            if item:
+                item["created_at"] = time.time() + seconds
+                item["reminded"] = False
+
 
 
 reminder_store = ReminderStore()

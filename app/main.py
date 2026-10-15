@@ -2276,6 +2276,39 @@ def handle_additional_callbacks(call):
         logger.error(f"Error in additional callbacks: {str(e)}", exc_info=True)
         bot.answer_callback_query(call.id, "⚠️ Произошла ошибка")
 
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("reminder_"))
+def handle_reminder_callback(call):
+    try:
+        action, chat_id_text = call.data.split(":", 1)
+        chat_id = int(chat_id_text)
+        owner_id = call.from_user.id
+
+        if action == "reminder_done":
+            reminder_store.dismiss(owner_id, chat_id)
+            text = "✅ Напоминание закрыто"
+        elif action == "reminder_snooze":
+            reminder_store.snooze(owner_id, chat_id)
+            text = "⏰ Напомню через 3 часа"
+        elif action == "reminder_disable":
+            reminder_store.disable(owner_id, chat_id)
+            text = "🚫 Напоминания по этому чату отключены"
+        else:
+            text = "⚠️ Неизвестное действие"
+
+        bot.answer_callback_query(call.id, text, show_alert=False)
+        try:
+            bot.edit_message_reply_markup(
+                owner_id,
+                call.message.message_id,
+                reply_markup=None,
+            )
+        except Exception:
+            pass
+    except Exception as e:
+        logger.error(f"Error handling reminder callback: {e}", exc_info=True)
+        bot.answer_callback_query(call.id, "⚠️ Не удалось обработать напоминание", show_alert=True)
+
 def cleanup_old_statistics():
     """Удаляет статистику и сообщения старше 2 недель"""
     try:
@@ -2307,6 +2340,21 @@ def cleanup_scheduler():
                     if reminder["kind"] == "promise"
                     else "Собеседник задал вопрос:"
                 )
+                keyboard = InlineKeyboardMarkup(row_width=1)
+                keyboard.add(
+                    InlineKeyboardButton(
+                        "✅ Уже ответил",
+                        callback_data=f"reminder_done:{chat_id}",
+                    ),
+                    InlineKeyboardButton(
+                        "⏰ Напомнить через 3 часа",
+                        callback_data=f"reminder_snooze:{chat_id}",
+                    ),
+                    InlineKeyboardButton(
+                        "🚫 Не напоминать по этому чату",
+                        callback_data=f"reminder_disable:{chat_id}",
+                    ),
+                )
                 safe_send_message(
                     owner_id,
                     "⏰ <b>Возможно, вы забыли ответить</b>\n\n"
@@ -2314,6 +2362,7 @@ def cleanup_scheduler():
                     f"<i>{escape(reminder['text'])}</i>\n\n"
                     "Сообщение остаётся последним уже около 4 часов.",
                     parse_mode="HTML",
+                    reply_markup=keyboard,
                 )
 
             # Запускаем очистку в 3 часа ночи
