@@ -1,0 +1,1 @@
+"""In-memory application storage."""
