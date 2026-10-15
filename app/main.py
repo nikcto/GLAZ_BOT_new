@@ -197,6 +197,26 @@ def get_notify_setting(user_id: int) -> bool:
         return True
 
 
+def get_reminders_setting(user_id: int) -> bool:
+    try:
+        result = supabase.table("users").select("reminders_enabled").eq("user_id", user_id).execute()
+        if result.data and result.data[0].get("reminders_enabled") is not None:
+            return bool(result.data[0]["reminders_enabled"])
+        return True
+    except Exception as e:
+        logger.error(f"Error getting reminders setting for {user_id}: {e}")
+        return True
+
+
+def set_reminders_setting(user_id: int, enabled: bool) -> bool:
+    try:
+        supabase.table("users").update({"reminders_enabled": enabled}).eq("user_id", user_id).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Error updating reminders setting for {user_id}: {e}")
+        return False
+
+
 def safe_send_message(chat_id, text, parse_mode=None, **kwargs):
     """Безопасная отправка сообщения с обработкой ошибки 403 (бот заблокирован) и сетевых ошибок"""
     kwargs.setdefault('disable_web_page_preview', True)
@@ -636,12 +656,15 @@ def handle_message(message):
         content = message.text if content_type == 'text' else file_id
 
         # Напоминания работают только для текстовых сообщений и хранятся в RAM.
-        reminder_store.update(
-            owner_id,
-            message.chat.id,
-            is_outgoing,
-            message.text if content_type == 'text' else caption,
-        )
+        reminders_enabled = get_reminders_setting(owner_id)
+        reminder_store.set_enabled(owner_id, reminders_enabled)
+        if reminders_enabled:
+            reminder_store.update(
+                owner_id,
+                message.chat.id,
+                is_outgoing,
+                message.text if content_type == 'text' else caption,
+            )
 
         sender_info = get_sender_info(message)
         messages_log.set(message.chat.id, message.message_id, {
@@ -2194,7 +2217,8 @@ def handle_menu_callback(call):
             )
 
         elif action == "reminders":
-            reminders_enabled = reminder_store.is_enabled(call.from_user.id)
+            reminders_enabled = get_reminders_setting(call.from_user.id)
+            reminder_store.set_enabled(call.from_user.id, reminders_enabled)
             keyboard = types.InlineKeyboardMarkup(row_width=1)
             keyboard.add(
                 types.InlineKeyboardButton(
@@ -2318,7 +2342,10 @@ def handle_additional_callbacks(call):
 def handle_reminders_toggle(call):
     try:
         owner_id = call.from_user.id
-        enabled = not reminder_store.is_enabled(owner_id)
+        enabled = not get_reminders_setting(owner_id)
+        if not set_reminders_setting(owner_id, enabled):
+            bot.answer_callback_query(call.id, "⚠️ Не удалось сохранить настройку", show_alert=True)
+            return
         reminder_store.set_enabled(owner_id, enabled)
         status = "включены" if enabled else "отключены"
 
