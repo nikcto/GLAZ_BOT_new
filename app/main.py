@@ -37,6 +37,7 @@ from app.services.contest import (
 )
 from app.services.ntfy import register_ntfy_handlers, send_ntfy_notification
 from app.storage.message_store import MessageStore
+from app.services.reminder_service import reminder_store
 import sys
 sys.path.append('./Working')
 
@@ -633,6 +634,14 @@ def handle_message(message):
         content_type, file_id, caption = get_file_info(message)
         # Сохраняем настоящий file_id для медиафайлов, а не маркер
         content = message.text if content_type == 'text' else file_id
+
+        # Напоминания работают только для текстовых сообщений и хранятся в RAM.
+        reminder_store.update(
+            owner_id,
+            message.chat.id,
+            is_outgoing,
+            message.text if content_type == 'text' else caption,
+        )
 
         sender_info = get_sender_info(message)
         messages_log.set(message.chat.id, message.message_id, {
@@ -2280,14 +2289,6 @@ def cleanup_old_statistics():
             
         logger.info(f"Удалено {len(stats_result.data) if stats_result.data else 0} записей статистики старше 2 недель")
 
-        # Удаляем старые сообщения
-        messages_result = supabase.table("messages") \
-            .delete() \
-            .lt("created_at", two_weeks_ago) \
-            .execute()
-            
-        logger.info(f"Удалено {len(messages_result.data) if messages_result.data else 0} сообщений старше 2 недель")
-
     except Exception as e:
         logger.error(f"Ошибка при очистке старых данных: {str(e)}")
 
@@ -2299,6 +2300,21 @@ def cleanup_scheduler():
         try:
             now = datetime.now()
             today = now.date()
+
+            for owner_id, chat_id, reminder in reminder_store.due():
+                kind_text = (
+                    "Вы написали, что ответите позже:"
+                    if reminder["kind"] == "promise"
+                    else "Собеседник задал вопрос:"
+                )
+                safe_send_message(
+                    owner_id,
+                    "⏰ <b>Возможно, вы забыли ответить</b>\n\n"
+                    f"{kind_text}\n"
+                    f"<i>{escape(reminder['text'])}</i>\n\n"
+                    "Сообщение остаётся последним уже около 4 часов.",
+                    parse_mode="HTML",
+                )
 
             # Запускаем очистку в 3 часа ночи
             if now.hour == 3 and now.minute == 0 and last_cleanup_date != today:
